@@ -1,95 +1,57 @@
-"use client"
-
-import Link from "next/link"
-import Image from "next/image"
-import { Card, CardContent } from "@/components/ui/card"
+import { Card, CardContent, CardFooter } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Play, Heart, ShoppingCart, Star } from "lucide-react"
-import { SuiIcon } from "@/components/sui-icon"
-import type { Database } from "@/lib/supabase/database.types"
+import { Music, Film, ShoppingCart } from "lucide-react"
+import Image from "next/image"
+import Link from "next/link"
 
-type Content = Database["public"]["Tables"]["content"]["Row"] & {
-  profiles: Database["public"]["Tables"]["profiles"]["Row"]
-}
+export function ContentCard({ content }) {
+  const contentTypeIcon = content.content_type === "music" ? Music : Film
 
-interface ContentCardProps {
-  content: Content
-  onPlayClick?: (content: Content) => void
-  onLikeClick?: (content: Content) => void
-  onBuyClick?: (content: Content) => void
-}
-
-export function ContentCard({ content, onPlayClick, onLikeClick, onBuyClick }: ContentCardProps) {
   return (
-    <Card className="overflow-hidden card-hover bg-card/50 backdrop-blur-sm">
-      <CardContent className="p-0">
-        <div className="relative">
-          <Image
-            src={content.cover_url || "/placeholder.svg?height=400&width=400"}
-            alt={content.title}
-            width={400}
-            height={400}
-            className="object-cover aspect-square w-full"
-          />
-          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-4">
-            <Button
-              variant="default"
-              size="icon"
-              className="rounded-full h-12 w-12 text-xl hover:scale-110 transition-transform"
-              onClick={() => onPlayClick?.(content)}
-            >
-              <Play className="h-6 w-6 fill-primary-foreground text-primary-foreground ml-1" />
-            </Button>
-            <Button
-              variant="secondary"
-              size="icon"
-              className="rounded-full h-10 w-10 hover:scale-110 transition-transform"
-              onClick={() => onLikeClick?.(content)}
-            >
-              <Heart className="h-5 w-5" />
-            </Button>
-          </div>
-
-          {content.is_nft && (
-            <div className="absolute top-2 left-2">
-              <Badge variant="default" className="bg-sui hover:bg-sui-dark">
-                <Star className="h-3 w-3 mr-1 fill-white" /> NFT
-              </Badge>
-            </div>
-          )}
-
-          <div className="absolute top-2 right-2">
-            <div className="flex items-center bg-black/60 text-white px-2 py-0.5 rounded-md text-xs">
-              <SuiIcon className="h-3 w-3 mr-1" />
-              {content.price}
-            </div>
-          </div>
-
-          <div className="absolute bottom-2 left-2 glass-effect px-2 py-0.5 text-xs rounded-md uppercase font-medium">
-            {content.content_type}
-          </div>
+    <Card className="overflow-hidden flex flex-col">
+      <div className="relative aspect-square">
+        <Image
+          src={content.cover_url || "/placeholder.svg?height=400&width=400"}
+          alt={content.title}
+          fill
+          className="object-cover"
+        />
+        <div className="absolute top-2 right-2">
+          <Badge variant={content.is_nft ? "default" : "secondary"}>{content.is_nft ? "NFT" : "Digital"}</Badge>
         </div>
-        <div className="p-4 space-y-2">
-          <div>
-            <Link href={`/content/${content.id}`} className="font-semibold hover:underline line-clamp-1">
-              {content.title}
-            </Link>
-            <p className="text-sm text-muted-foreground">{content.profiles.username}</p>
-          </div>
-          <div className="flex justify-between items-center">
-            <div className="flex items-center">
-              <Button variant="ghost" size="sm" className="p-0 h-8" onClick={() => onPlayClick?.(content)}>
-                <Play className="h-4 w-4 mr-1" />
-                Play
-              </Button>
-            </div>
-            <Button size="icon" variant="ghost" onClick={() => onBuyClick?.(content)}>
-              <ShoppingCart className="h-4 w-4" />
-            </Button>
+        <div className="absolute top-2 left-2">
+          <Badge variant="outline" className="bg-background/80">
+            <contentTypeIcon className="h-3 w-3 mr-1" />
+            {content.content_type === "music" ? "Music" : "Movie"}
+          </Badge>
+        </div>
+      </div>
+      <CardContent className="pt-4 flex-grow">
+        <div className="space-y-1">
+          <h3 className="font-bold truncate">{content.title}</h3>
+          <p className="text-sm text-muted-foreground line-clamp-2">{content.description}</p>
+        </div>
+        <div className="mt-2 flex items-center justify-between">
+          <div className="flex items-center">
+            <p className="font-medium">${content.price.toFixed(2)}</p>
+            {content.royalty_percentage > 0 && (
+              <span className="text-xs text-muted-foreground ml-2">{content.royalty_percentage}% royalty</span>
+            )}
           </div>
         </div>
       </CardContent>
+      <CardFooter className="pt-0">
+        <div className="flex gap-2 w-full">
+          <Button variant="outline" size="sm" className="w-full" asChild>
+            <Link href={`/content/${content.id}`}>Preview</Link>
+          </Button>
+          <Button size="sm" className="w-full">
+            <ShoppingCart className="h-4 w-4 mr-2" />
+            Buy
+          </Button>
+        </div>
+      </CardFooter>
     </Card>
   )
 }

@@ -1,19 +1,26 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { MediaPlayer } from "@/components/player/media-player"
+import { CommentSection } from "@/components/content/comment-section"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Separator } from "@/components/ui/separator"
 import { notFound } from "next/navigation"
 import Image from "next/image"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { SuiIcon } from "@/components/sui-icon"
-import { Heart, Share2, Play, User, ShoppingCart, MessageSquare } from "lucide-react"
-import { CommentSection } from "@/components/content/comment-section"
 import Link from "next/link"
+import { Heart, Share2, ShoppingCart, Calendar, User, Tag, Edit } from "lucide-react"
+import { SuiIcon } from "@/components/sui-icon"
 
-export default async function ContentDetailPage({ params }: { params: { id: string } }) {
+export default async function ContentDetailPage({ params }) {
   const supabase = createServerSupabaseClient()
 
+  // Get current user
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
   // Fetch content with creator profile
-  const { data: content, error } = await supabase
+  const { data: content } = await supabase
     .from("content")
     .select(`
       *,
@@ -22,95 +29,86 @@ export default async function ContentDetailPage({ params }: { params: { id: stri
     .eq("id", params.id)
     .single()
 
-  if (error || !content) {
+  if (!content) {
     notFound()
   }
 
-  // Fetch comments
-  const { data: comments } = await supabase
-    .from("comments")
-    .select(`
-      *,
-      profiles:user_id(*)
-    `)
-    .eq("content_id", content.id)
-    .order("created_at", { ascending: false })
+  // Check if user has purchased this content
+  let hasPurchased = false
+  if (user) {
+    const { data: purchase } = await supabase
+      .from("purchases")
+      .select()
+      .eq("content_id", content.id)
+      .eq("user_id", user.id)
+      .maybeSingle()
+
+    hasPurchased = !!purchase
+  }
+
+  // Check if content is an NFT
+  let nftData = null
+  if (content.is_nft) {
+    const { data: nft } = await supabase.from("nfts").select().eq("content_id", content.id).maybeSingle()
+
+    nftData = nft
+  }
+
+  // Format date
+  const createdAt = new Date(content.created_at).toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  })
+
+  const isOwner = user?.id === content.creator_id
 
   return (
-    <div className="container py-12">
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_400px] gap-8">
-        <div className="space-y-6">
-          <Card>
-            <CardContent className="p-0">
-              <div className="relative">
-                <Image
-                  src={content.cover_url || "/placeholder.svg?height=600&width=600"}
-                  alt={content.title}
-                  width={800}
-                  height={800}
-                  className="w-full aspect-square object-cover rounded-t-lg"
-                />
-                <div className="absolute top-4 right-4 flex gap-2">
-                  <Button variant="secondary" size="icon" className="rounded-full h-10 w-10">
-                    <Heart className="h-5 w-5" />
-                  </Button>
-                  <Button variant="secondary" size="icon" className="rounded-full h-10 w-10">
-                    <Share2 className="h-5 w-5" />
-                  </Button>
-                </div>
-              </div>
+    <div className="container py-8">
+      <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-8">
+        <div className="space-y-8">
+          {/* Media Player */}
+          <MediaPlayer
+            type={content.content_type === "music" ? "audio" : "video"}
+            src={content.content_url}
+            title={content.title}
+            artist={content.profiles?.full_name || content.profiles?.username}
+            coverUrl={content.cover_url}
+            autoplay={false}
+          />
 
-              {content.content_url && (
-                <div className="p-4 flex justify-center">
-                  {content.content_type === "music" ? (
-                    <audio controls className="w-full">
-                      <source src={content.content_url} type="audio/mpeg" />
-                      Your browser does not support the audio element.
-                    </audio>
-                  ) : (
-                    <video controls className="w-full max-h-[500px]">
-                      <source src={content.content_url} type="video/mp4" />
-                      Your browser does not support the video element.
-                    </video>
-                  )}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
+          {/* Description */}
           <Card>
             <CardHeader>
               <CardTitle>Description</CardTitle>
             </CardHeader>
             <CardContent>
-              <p>{content.description || "No description provided."}</p>
+              <p className="whitespace-pre-line">{content.description}</p>
             </CardContent>
           </Card>
 
-          <CommentSection contentId={content.id} comments={comments || []} />
+          {/* Comments Section */}
+          <CommentSection contentId={content.id} />
         </div>
 
         <div className="space-y-6">
+          {/* Content Info */}
           <Card>
             <CardHeader>
               <div className="flex justify-between items-start">
                 <div>
                   <Badge variant="outline" className="mb-2">
-                    {content.content_type}
+                    {content.content_type.charAt(0).toUpperCase() + content.content_type.slice(1)}
                   </Badge>
-                  {content.is_nft && (
-                    <Badge variant="secondary" className="ml-2 mb-2">
-                      NFT
-                    </Badge>
-                  )}
                   <CardTitle className="text-2xl">{content.title}</CardTitle>
                   <CardDescription className="flex items-center gap-1 mt-1">
                     <User className="h-3 w-3" />
-                    <Link href={`/profile/${content.profiles.id}`} className="hover:underline">
-                      {content.profiles.username}
+                    <Link href={`/profile/${content.creator_id}`} className="hover:underline">
+                      {content.profiles?.full_name || content.profiles?.username}
                     </Link>
                   </CardDescription>
                 </div>
+                {content.is_nft && <Badge variant="secondary">NFT</Badge>}
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -118,60 +116,110 @@ export default async function ContentDetailPage({ params }: { params: { id: stri
                 <div className="text-sm text-muted-foreground">Price</div>
                 <div className="flex items-center gap-1">
                   <SuiIcon className="h-5 w-5" />
-                  <span className="text-xl font-bold">{content.price}</span>
+                  <span className="text-xl font-bold">{content.price} SUI</span>
                 </div>
               </div>
 
-              <div className="flex justify-between items-center">
-                <div className="text-sm text-muted-foreground">Royalty</div>
-                <div className="text-sm">{content.royalty_percentage}%</div>
+              <Separator />
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex flex-col gap-1">
+                  <span className="text-sm text-muted-foreground">Created</span>
+                  <div className="flex items-center gap-1">
+                    <Calendar className="h-4 w-4 text-muted-foreground" />
+                    <span>{createdAt}</span>
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <span className="text-sm text-muted-foreground">Royalty</span>
+                  <div className="flex items-center gap-1">
+                    <Tag className="h-4 w-4 text-muted-foreground" />
+                    <span>{content.royalty_percentage}%</span>
+                  </div>
+                </div>
               </div>
 
-              <div className="flex gap-3 pt-2">
-                <Button className="flex-1">
+              {nftData && (
+                <>
+                  <Separator />
+                  <div className="space-y-2">
+                    <h3 className="font-medium">NFT Details</h3>
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div>
+                        <span className="text-muted-foreground">Edition</span>
+                        <p>
+                          {nftData.edition_number} of {nftData.max_editions}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Token ID</span>
+                        <p className="font-mono text-xs truncate">{nftData.token_id}</p>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+            </CardContent>
+            <CardFooter className="flex flex-col gap-3">
+              {!isOwner && !hasPurchased && (
+                <Button className="w-full">
                   <ShoppingCart className="h-4 w-4 mr-2" />
                   Buy Now
                 </Button>
+              )}
+
+              {hasPurchased && (
+                <div className="bg-primary/10 text-primary rounded-md p-2 text-center text-sm">
+                  You own this content
+                </div>
+              )}
+
+              {isOwner && (
+                <Button asChild variant="outline" className="w-full">
+                  <Link href={`/content/${content.id}/edit`}>
+                    <Edit className="h-4 w-4 mr-2" />
+                    Edit Content
+                  </Link>
+                </Button>
+              )}
+
+              <div className="flex gap-2 w-full">
                 <Button variant="outline" className="flex-1">
-                  <Play className="h-4 w-4 mr-2" />
-                  {content.content_type === "music" ? "Play" : "Watch"}
+                  <Heart className="h-4 w-4 mr-2" />
+                  Favorite
+                </Button>
+                <Button variant="outline" className="flex-1">
+                  <Share2 className="h-4 w-4 mr-2" />
+                  Share
                 </Button>
               </div>
-            </CardContent>
+            </CardFooter>
           </Card>
 
+          {/* Creator Info */}
           <Card>
             <CardHeader>
               <CardTitle>Creator</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex items-center gap-4">
-                <div className="h-16 w-16 rounded-full overflow-hidden bg-muted">
-                  <Image
-                    src={content.profiles.avatar_url || "/placeholder.svg?height=100&width=100"}
-                    alt={content.profiles.username}
-                    width={64}
-                    height={64}
-                    className="h-full w-full object-cover"
-                  />
-                </div>
+                <Image
+                  src={content.profiles?.avatar_url || "/placeholder.svg?height=80&width=80"}
+                  alt={content.profiles?.username || "Creator"}
+                  width={80}
+                  height={80}
+                  className="rounded-full"
+                />
                 <div>
-                  <h3 className="font-medium">{content.profiles.username}</h3>
-                  <p className="text-sm text-muted-foreground">
-                    {content.profiles.bio
-                      ? content.profiles.bio.substring(0, 100) + (content.profiles.bio.length > 100 ? "..." : "")
-                      : "No bio provided"}
-                  </p>
+                  <h3 className="font-bold">{content.profiles?.full_name || content.profiles?.username}</h3>
+                  {content.profiles?.bio && (
+                    <p className="text-sm text-muted-foreground line-clamp-2">{content.profiles.bio}</p>
+                  )}
+                  <Button variant="link" asChild className="p-0 h-auto">
+                    <Link href={`/profile/${content.creator_id}`}>View Profile</Link>
+                  </Button>
                 </div>
-              </div>
-
-              <div className="mt-4 flex gap-2">
-                <Button variant="outline" className="flex-1" asChild>
-                  <Link href={`/profile/${content.profiles.id}`}>View Profile</Link>
-                </Button>
-                <Button variant="outline" size="icon">
-                  <MessageSquare className="h-4 w-4" />
-                </Button>
               </div>
             </CardContent>
           </Card>

@@ -1,8 +1,6 @@
 "use client"
 
-import type React from "react"
-
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -12,31 +10,43 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Slider } from "@/components/ui/slider"
 import { getBrowserSupabaseClient } from "@/lib/supabase/client"
-import { Loader2, Upload, Music, Film } from "lucide-react"
-import type { Database } from "@/lib/supabase/database.types"
+import { getSuiClient } from "@/lib/blockchain/sui-client"
+import { Loader2, Upload, Music, Film, AlertCircle } from "lucide-react"
+import { Progress } from "@/components/ui/progress"
 
-type Content = Database["public"]["Tables"]["content"]["Row"]
-
-export function ContentForm({ initialContent }: { initialContent?: Partial<Content> }) {
-  const [content, setContent] = useState<Partial<Content>>(
-    initialContent || {
-      content_type: "music",
-      is_nft: false,
-      royalty_percentage: 10,
-    },
-  )
+export function ContentForm({ initialContent }) {
+  const [content, setContent] = useState({
+    content_type: "music",
+    is_nft: false,
+    royalty_percentage: 10,
+    ...initialContent,
+  })
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState(null)
   const [success, setSuccess] = useState(false)
-  const [coverFile, setCoverFile] = useState<File | null>(null)
-  const [contentFile, setContentFile] = useState<File | null>(null)
-  const [coverPreview, setCoverPreview] = useState<string | null>(initialContent?.cover_url || null)
+  const [coverFile, setCoverFile] = useState(null)
+  const [contentFile, setContentFile] = useState(null)
+  const [coverPreview, setCoverPreview] = useState(initialContent?.cover_url || null)
+  const [uploadProgress, setUploadProgress] = useState(0)
+  const [mintingNft, setMintingNft] = useState(false)
+  const [walletConnected, setWalletConnected] = useState(false)
 
   const router = useRouter()
   const supabase = getBrowserSupabaseClient()
+  const suiClient = getSuiClient()
 
-  const handleCoverChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  useEffect(() => {
+    const checkWalletConnection = async () => {
+      const wallet = suiClient.getWallet()
+      setWalletConnected(!!wallet)
+    }
+
+    checkWalletConnection()
+  }, [])
+
+  const handleCoverChange = (e) => {
     if (!e.target.files || e.target.files.length === 0) {
       return
     }
@@ -47,12 +57,12 @@ export function ContentForm({ initialContent }: { initialContent?: Partial<Conte
     // Create preview
     const reader = new FileReader()
     reader.onloadend = () => {
-      setCoverPreview(reader.result as string)
+      setCoverPreview(reader.result)
     }
     reader.readAsDataURL(file)
   }
 
-  const handleContentFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleContentFileChange = (e) => {
     if (!e.target.files || e.target.files.length === 0) {
       return
     }
@@ -61,13 +71,28 @@ export function ContentForm({ initialContent }: { initialContent?: Partial<Conte
     setContentFile(file)
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const connectWallet = async () => {
+    try {
+      await suiClient.connect()
+      setWalletConnected(true)
+    } catch (error) {
+      setError("Failed to connect wallet: " + error.message)
+    }
+  }
+
+  const handleSubmit = async (e) => {
     e.preventDefault()
     setLoading(true)
     setError(null)
     setSuccess(false)
+    setUploadProgress(0)
 
     try {
+      // Check if NFT and wallet is connected
+      if (content.is_nft && !walletConnected) {
+        throw new Error("Please connect your wallet to mint an NFT")
+      }
+
       const {
         data: { user },
       } = await supabase.auth.getUser()
@@ -79,6 +104,7 @@ export function ContentForm({ initialContent }: { initialContent?: Partial<Conte
         const fileExt = coverFile.name.split(".").pop()
         const filePath = `covers/${user.id}_${Date.now()}.${fileExt}`
 
+        setUploadProgress(10)
         const { error: uploadError } = await supabase.storage
           .from("covers")
           .upload(filePath, coverFile, { upsert: true })
@@ -88,8 +114,8 @@ export function ContentForm({ initialContent }: { initialContent?: Partial<Conte
         const {
           data: { publicUrl },
         } = supabase.storage.from("covers").getPublicUrl(filePath)
-
         coverUrl = publicUrl
+        setUploadProgress(30)
       }
 
       // Upload content file if provided
@@ -98,6 +124,7 @@ export function ContentForm({ initialContent }: { initialContent?: Partial<Conte
         const fileExt = contentFile.name.split(".").pop()
         const filePath = `content/${user.id}_${Date.now()}.${fileExt}`
 
+        setUploadProgress(40)
         const { error: uploadError } = await supabase.storage
           .from("content")
           .upload(filePath, contentFile, { upsert: true })
@@ -107,12 +134,14 @@ export function ContentForm({ initialContent }: { initialContent?: Partial<Conte
         const {
           data: { publicUrl },
         } = supabase.storage.from("content").getPublicUrl(filePath)
-
         contentUrl = publicUrl
+        setUploadProgress(70)
       }
 
+      let contentId = initialContent?.id
+
       // Create or update content
-      if (initialContent?.id) {
+      if (contentId) {
         // Update existing content
         const { error: updateError } = await supabase
           .from("content")
@@ -122,28 +151,69 @@ export function ContentForm({ initialContent }: { initialContent?: Partial<Conte
             content_url: contentUrl,
             updated_at: new Date().toISOString(),
           })
-          .eq("id", initialContent.id)
+          .eq("id", contentId)
 
         if (updateError) throw updateError
       } else {
         // Create new content
-        const { error: insertError } = await supabase.from("content").insert({
-          ...content,
-          creator_id: user.id,
-          cover_url: coverUrl,
-          content_url: contentUrl,
-        })
+        const { data, error: insertError } = await supabase
+          .from("content")
+          .insert({
+            ...content,
+            creator_id: user.id,
+            cover_url: coverUrl,
+            content_url: contentUrl,
+          })
+          .select()
 
         if (insertError) throw insertError
+
+        contentId = data[0].id
       }
 
+      setUploadProgress(80)
+
+      // Mint NFT if requested
+      if (content.is_nft && contentId) {
+        setMintingNft(true)
+
+        // Prepare metadata for NFT
+        const metadata = {
+          name: content.title,
+          description: content.description,
+          image: coverUrl,
+          content: contentUrl,
+          creator: user.id,
+          contentType: content.content_type,
+          royaltyPercentage: content.royalty_percentage,
+        }
+
+        // Mint NFT on Sui blockchain
+        const nft = await suiClient.mintNFT(contentId, metadata)
+
+        // Save NFT data to database
+        await supabase.from("nfts").insert({
+          content_id: contentId,
+          token_id: nft.id,
+          edition_number: nft.edition,
+          max_editions: nft.maxEditions,
+          owner_id: user.id,
+          metadata: nft.metadata,
+        })
+
+        setMintingNft(false)
+      }
+
+      setUploadProgress(100)
       setSuccess(true)
+
       setTimeout(() => {
-        router.push("/marketplace")
+        router.push(`/content/${contentId}`)
         router.refresh()
       }, 1500)
-    } catch (error: any) {
+    } catch (error) {
       setError(error.message || "An error occurred while saving content")
+      setUploadProgress(0)
     } finally {
       setLoading(false)
     }
@@ -168,9 +238,10 @@ export function ContentForm({ initialContent }: { initialContent?: Partial<Conte
               onValueChange={(value) =>
                 setContent({
                   ...content,
-                  content_type: value as "music" | "movie" | "album" | "podcast",
+                  content_type: value,
                 })
               }
+              disabled={loading}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Select content type" />
@@ -201,6 +272,7 @@ export function ContentForm({ initialContent }: { initialContent?: Partial<Conte
               value={content.title || ""}
               onChange={(e) => setContent({ ...content, title: e.target.value })}
               required
+              disabled={loading}
             />
           </div>
 
@@ -211,6 +283,7 @@ export function ContentForm({ initialContent }: { initialContent?: Partial<Conte
               value={content.description || ""}
               onChange={(e) => setContent({ ...content, description: e.target.value })}
               rows={4}
+              disabled={loading}
             />
           </div>
 
@@ -235,12 +308,20 @@ export function ContentForm({ initialContent }: { initialContent?: Partial<Conte
                 )}
               </div>
               <div className="flex-1">
-                <Input id="cover" type="file" accept="image/*" onChange={handleCoverChange} className="hidden" />
+                <Input
+                  id="cover"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleCoverChange}
+                  className="hidden"
+                  disabled={loading}
+                />
                 <Button
                   type="button"
                   variant="outline"
                   onClick={() => document.getElementById("cover")?.click()}
                   className="w-full"
+                  disabled={loading}
                 >
                   <Upload className="mr-2 h-4 w-4" />
                   Upload Cover
@@ -258,12 +339,14 @@ export function ContentForm({ initialContent }: { initialContent?: Partial<Conte
                 accept={content.content_type === "music" ? "audio/*" : "video/*"}
                 onChange={handleContentFileChange}
                 className="flex-1"
+                disabled={loading}
               />
               {content.content_url && !contentFile && (
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => window.open(content.content_url || "", "_blank")}
+                  onClick={() => window.open(content.content_url, "_blank")}
+                  disabled={loading}
                 >
                   View File
                 </Button>
@@ -284,20 +367,23 @@ export function ContentForm({ initialContent }: { initialContent?: Partial<Conte
               value={content.price || ""}
               onChange={(e) => setContent({ ...content, price: Number.parseFloat(e.target.value) })}
               required
+              disabled={loading}
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="royalty_percentage">Royalty Percentage</Label>
-            <Input
+            <div className="flex justify-between">
+              <Label htmlFor="royalty_percentage">Royalty Percentage</Label>
+              <span className="text-sm font-medium">{content.royalty_percentage}%</span>
+            </div>
+            <Slider
               id="royalty_percentage"
-              type="number"
-              step="0.01"
-              min="0"
-              max="25"
-              value={content.royalty_percentage || 10}
-              onChange={(e) => setContent({ ...content, royalty_percentage: Number.parseFloat(e.target.value) })}
-              required
+              min={0}
+              max={25}
+              step={0.5}
+              value={[content.royalty_percentage || 10]}
+              onValueChange={(value) => setContent({ ...content, royalty_percentage: value[0] })}
+              disabled={loading}
             />
             <p className="text-sm text-muted-foreground">Percentage of sales you'll receive as royalties (max 25%)</p>
           </div>
@@ -307,9 +393,39 @@ export function ContentForm({ initialContent }: { initialContent?: Partial<Conte
               id="is_nft"
               checked={content.is_nft || false}
               onCheckedChange={(checked) => setContent({ ...content, is_nft: checked })}
+              disabled={loading}
             />
             <Label htmlFor="is_nft">Mint as NFT</Label>
           </div>
+
+          {content.is_nft && !walletConnected && (
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription className="flex justify-between items-center">
+                <span>Connect your wallet to mint an NFT</span>
+                <Button type="button" onClick={connectWallet} variant="outline" size="sm">
+                  Connect Wallet
+                </Button>
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {uploadProgress > 0 && uploadProgress < 100 && (
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span>Uploading...</span>
+                <span>{uploadProgress}%</span>
+              </div>
+              <Progress value={uploadProgress} />
+            </div>
+          )}
+
+          {mintingNft && (
+            <Alert>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <AlertDescription>Minting NFT on Sui blockchain...</AlertDescription>
+            </Alert>
+          )}
 
           {error && (
             <Alert variant="destructive">
@@ -328,7 +444,7 @@ export function ContentForm({ initialContent }: { initialContent?: Partial<Conte
             {loading ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Saving...
+                {uploadProgress > 0 ? `Uploading (${uploadProgress}%)` : "Saving..."}
               </>
             ) : initialContent?.id ? (
               "Update Content"

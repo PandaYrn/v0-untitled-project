@@ -1,10 +1,4 @@
-export type Json =
-  | string
-  | number
-  | boolean
-  | null
-  | { [key: string]: Json | undefined }
-  | Json[]
+export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]
 
 export interface Database {
   public: {
@@ -50,7 +44,7 @@ export interface Database {
           title: string
           description: string | null
           creator_id: string
-          content_type: 'music' | 'movie' | 'album' | 'podcast'
+          content_type: "music" | "movie" | "album" | "podcast"
           cover_url: string | null
           content_url: string | null
           price: number | null
@@ -65,7 +59,7 @@ export interface Database {
           title: string
           description?: string | null
           creator_id: string
-          content_type: 'music' | 'movie' | 'album' | 'podcast'
+          content_type: "music" | "movie" | "album" | "podcast"
           cover_url?: string | null
           content_url?: string | null
           price?: number | null
@@ -80,7 +74,7 @@ export interface Database {
           title?: string
           description?: string | null
           creator_id?: string
-          content_type?: 'music' | 'movie' | 'album' | 'podcast'
+          content_type?: "music" | "movie" | "album" | "podcast"
           cover_url?: string | null
           content_url?: string | null
           price?: number | null
