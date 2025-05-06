@@ -22,11 +22,29 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Admin access required" }, { status: 403 })
     }
 
-    const result = await seedAnalyticsData()
-
-    return NextResponse.json(result)
+    try {
+      const result = await seedAnalyticsData()
+      return NextResponse.json(result)
+    } catch (error) {
+      console.error("Error seeding analytics data:", error)
+      return NextResponse.json(
+        {
+          error: "Failed to seed analytics data",
+          details: error.message,
+          success: false,
+        },
+        { status: 500 },
+      )
+    }
   } catch (error) {
     console.error("Error in seed analytics API:", error)
-    return NextResponse.json({ error: "Failed to seed analytics data" }, { status: 500 })
+    return NextResponse.json(
+      {
+        error: "Failed to process request",
+        details: error.message,
+        success: false,
+      },
+      { status: 500 },
+    )
   }
 }

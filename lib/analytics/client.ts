@@ -1,6 +1,15 @@
 "use client"
 
 /**
+ * Analytics namespace for client-side tracking functions
+ */
+export const Analytics = {
+  trackContentView,
+  trackEngagement,
+  trackTransaction,
+}
+
+/**
  * Track a content view from the client side
  */
 export async function trackContentView({

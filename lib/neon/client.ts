@@ -5,13 +5,45 @@ import { Pool } from "@neondatabase/serverless"
 neonConfig.webSocketConstructor = globalThis.WebSocket
 neonConfig.fetchConnectionCache = true
 
-// Create a connection pool
-const pool = new Pool({ connectionString: process.env.NEON_NEON_DATABASE_URL })
+// Get the database URL from environment variables with fallback
+const getDatabaseUrl = () => {
+  // Check for various possible environment variable names
+  const possibleEnvVars = [
+    process.env.NEON_NEON_DATABASE_URL,
+    process.env.DATABASE_URL,
+    process.env.POSTGRES_URL,
+    process.env.NEON_POSTGRES_URL,
+  ]
+
+  const databaseUrl = possibleEnvVars.find((url) => url && url.length > 0)
+
+  if (!databaseUrl) {
+    console.warn("No database URL found in environment variables. Using dummy URL for development.")
+    return "postgres://localhost:5432/dummy" // Dummy URL for development
+  }
+
+  return databaseUrl
+}
+
+// Create a connection pool with error handling
+let pool: Pool | null = null
+try {
+  pool = new Pool({
+    connectionString: getDatabaseUrl(),
+  })
+} catch (error) {
+  console.error("Failed to create database pool:", error)
+}
 
 /**
  * Execute a SQL query against the Neon database
  */
 export async function executeQuery(query: string, params: any[] = []) {
+  if (!pool) {
+    console.error("Database pool not initialized")
+    return []
+  }
+
   try {
     const client = await pool.connect()
     try {
@@ -22,7 +54,8 @@ export async function executeQuery(query: string, params: any[] = []) {
     }
   } catch (error) {
     console.error("Database query error:", error)
-    throw error
+    // Return empty array instead of throwing to prevent page crashes
+    return []
   }
 }
 
@@ -30,6 +63,12 @@ export async function executeQuery(query: string, params: any[] = []) {
  * Execute a SQL query with a direct connection (for one-off queries)
  */
 export async function executeDirectQuery(query: string, params: any[] = []) {
-  const sql = neon(process.env.NEON_DATABASE_URL!)
-  return sql(query, params)
+  try {
+    const sql = neon(getDatabaseUrl())
+    return await sql(query, params)
+  } catch (error) {
+    console.error("Direct database query error:", error)
+    // Return empty array instead of throwing to prevent page crashes
+    return []
+  }
 }

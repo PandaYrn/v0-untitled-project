@@ -1,170 +1,238 @@
-"use server"
-
 import { executeQuery } from "@/lib/neon/client"
 
 /**
- * Get overview metrics for the dashboard
+ * Get overview metrics for the analytics dashboard
  */
-export async function getOverviewMetrics(days = 30) {
+export async function getOverviewMetrics() {
   try {
-    const query = `
-      WITH view_stats AS (
-        SELECT 
-          COUNT(*) as total_views,
-          COUNT(DISTINCT content_id) as viewed_content,
-          COUNT(DISTINCT user_id) as unique_viewers,
-          AVG(view_duration) as avg_duration
-        FROM analytics.content_views
-        WHERE view_timestamp >= NOW() - INTERVAL '${days} days'
+    // Default values in case of database errors
+    const defaultMetrics = {
+      totalViews: 0,
+      totalUsers: 0,
+      totalRevenue: 0,
+      conversionRate: 0,
+    }
+
+    // Query for total views
+    const viewsResult = await executeQuery(`
+      SELECT COUNT(*) as total_views FROM analytics.content_views
+    `)
+
+    // Query for unique users
+    const usersResult = await executeQuery(`
+      SELECT COUNT(DISTINCT user_id) as total_users FROM analytics.content_views
+      WHERE user_id IS NOT NULL
+    `)
+
+    // Query for total revenue
+    const revenueResult = await executeQuery(`
+      SELECT SUM(amount) as total_revenue FROM analytics.transactions
+    `)
+
+    // Query for conversion rate (users who made a purchase / total users)
+    const conversionResult = await executeQuery(`
+      WITH total_users AS (
+        SELECT COUNT(DISTINCT user_id) as count FROM analytics.content_views WHERE user_id IS NOT NULL
       ),
-      transaction_stats AS (
-        SELECT 
-          COUNT(*) as total_transactions,
-          SUM(amount) as total_revenue,
-          AVG(amount) as avg_transaction
-        FROM analytics.transactions
-        WHERE transaction_timestamp >= NOW() - INTERVAL '${days} days'
-      ),
-      engagement_stats AS (
-        SELECT 
-          COUNT(*) as total_engagements,
-          COUNT(DISTINCT user_id) as engaged_users
-        FROM analytics.user_engagement
-        WHERE event_timestamp >= NOW() - INTERVAL '${days} days'
+      paying_users AS (
+        SELECT COUNT(DISTINCT user_id) as count FROM analytics.transactions
       )
       SELECT 
-        v.total_views, v.viewed_content, v.unique_viewers, v.avg_duration,
-        t.total_transactions, t.total_revenue, t.avg_transaction,
-        e.total_engagements, e.engaged_users
-      FROM view_stats v, transaction_stats t, engagement_stats e
-    `
+        CASE 
+          WHEN tu.count = 0 THEN 0
+          ELSE (pu.count::float / tu.count::float) * 100 
+        END as conversion_rate
+      FROM total_users tu, paying_users pu
+    `)
 
-    const result = await executeQuery(query)
-    return result[0] || null
+    // Extract values from results or use defaults
+    const totalViews = viewsResult?.[0]?.total_views || defaultMetrics.totalViews
+    const totalUsers = usersResult?.[0]?.total_users || defaultMetrics.totalUsers
+    const totalRevenue = revenueResult?.[0]?.total_revenue || defaultMetrics.totalRevenue
+    const conversionRate = conversionResult?.[0]?.conversion_rate || defaultMetrics.conversionRate
+
+    return {
+      totalViews: Number.parseInt(totalViews),
+      totalUsers: Number.parseInt(totalUsers),
+      totalRevenue: Number.parseFloat(totalRevenue) || 0,
+      conversionRate: Number.parseFloat(conversionRate) || 0,
+    }
   } catch (error) {
     console.error("Error getting overview metrics:", error)
-    throw error
+    return {
+      totalViews: 0,
+      totalUsers: 0,
+      totalRevenue: 0,
+      conversionRate: 0,
+    }
   }
 }
 
 /**
- * Get daily view counts for charting
+ * Get daily view counts for the last 30 days
  */
-export async function getDailyViews(days = 30) {
+export async function getDailyViews() {
   try {
-    const query = `
+    const result = await executeQuery(`
+      WITH date_series AS (
+        SELECT generate_series(
+          current_date - interval '29 days',
+          current_date,
+          interval '1 day'
+        )::date as date
+      )
       SELECT 
-        DATE(view_timestamp) as date,
-        COUNT(*) as views,
-        COUNT(DISTINCT user_id) as unique_viewers
-      FROM analytics.content_views
-      WHERE view_timestamp >= NOW() - INTERVAL '${days} days'
-      GROUP BY DATE(view_timestamp)
-      ORDER BY date
-    `
+        ds.date,
+        COALESCE(COUNT(cv.id), 0) as view_count
+      FROM date_series ds
+      LEFT JOIN analytics.content_views cv ON ds.date = DATE(cv.created_at)
+      GROUP BY ds.date
+      ORDER BY ds.date
+    `)
 
-    return await executeQuery(query)
+    return (
+      result.map((row) => ({
+        date: row.date,
+        views: Number.parseInt(row.view_count),
+      })) || []
+    )
   } catch (error) {
     console.error("Error getting daily views:", error)
-    throw error
+    return []
   }
 }
 
 /**
- * Get daily revenue for charting
+ * Get daily revenue for the last 30 days
  */
-export async function getDailyRevenue(days = 30) {
+export async function getDailyRevenue() {
   try {
-    const query = `
+    const result = await executeQuery(`
+      WITH date_series AS (
+        SELECT generate_series(
+          current_date - interval '29 days',
+          current_date,
+          interval '1 day'
+        )::date as date
+      )
       SELECT 
-        DATE(transaction_timestamp) as date,
-        SUM(amount) as revenue,
-        COUNT(*) as transactions
-      FROM analytics.transactions
-      WHERE transaction_timestamp >= NOW() - INTERVAL '${days} days'
-      GROUP BY DATE(transaction_timestamp)
-      ORDER BY date
-    `
+        ds.date,
+        COALESCE(SUM(t.amount), 0) as revenue
+      FROM date_series ds
+      LEFT JOIN analytics.transactions t ON ds.date = DATE(t.created_at)
+      GROUP BY ds.date
+      ORDER BY ds.date
+    `)
 
-    return await executeQuery(query)
+    return (
+      result.map((row) => ({
+        date: row.date,
+        revenue: Number.parseFloat(row.revenue) || 0,
+      })) || []
+    )
   } catch (error) {
     console.error("Error getting daily revenue:", error)
-    throw error
+    return []
   }
 }
 
 /**
  * Get top performing content
  */
-export async function getTopContent(limit = 10) {
+export async function getTopContent() {
   try {
-    const query = `
-      WITH content_metrics AS (
-        SELECT 
-          content_id,
-          COUNT(*) as views,
-          COUNT(DISTINCT user_id) as unique_viewers,
-          AVG(view_duration) as avg_duration
-        FROM analytics.content_views
-        GROUP BY content_id
-      ),
-      content_revenue AS (
-        SELECT 
-          content_id,
-          SUM(amount) as revenue,
-          COUNT(*) as transactions
-        FROM analytics.transactions
-        WHERE content_id IS NOT NULL
-        GROUP BY content_id
-      ),
-      content_engagement AS (
-        SELECT 
-          content_id,
-          COUNT(*) as engagements
-        FROM analytics.user_engagement
-        WHERE content_id IS NOT NULL
-        GROUP BY content_id
-      )
+    const result = await executeQuery(`
       SELECT 
-        cm.content_id,
-        cm.views,
-        cm.unique_viewers,
-        cm.avg_duration,
-        COALESCE(cr.revenue, 0) as revenue,
-        COALESCE(cr.transactions, 0) as transactions,
-        COALESCE(ce.engagements, 0) as engagements
-      FROM content_metrics cm
-      LEFT JOIN content_revenue cr ON cm.content_id = cr.content_id
-      LEFT JOIN content_engagement ce ON cm.content_id = ce.content_id
-      ORDER BY cm.views DESC
-      LIMIT ${limit}
-    `
+        c.id,
+        c.title,
+        c.content_type,
+        COUNT(cv.id) as view_count,
+        COUNT(DISTINCT cv.user_id) as unique_viewers,
+        COALESCE(SUM(t.amount), 0) as revenue
+      FROM content c
+      LEFT JOIN analytics.content_views cv ON c.id = cv.content_id
+      LEFT JOIN analytics.transactions t ON c.id = t.content_id
+      GROUP BY c.id, c.title, c.content_type
+      ORDER BY view_count DESC
+      LIMIT 10
+    `)
 
-    return await executeQuery(query)
+    return (
+      result.map((row) => ({
+        id: row.id,
+        title: row.title,
+        contentType: row.content_type,
+        viewCount: Number.parseInt(row.view_count),
+        uniqueViewers: Number.parseInt(row.unique_viewers),
+        revenue: Number.parseFloat(row.revenue) || 0,
+      })) || []
+    )
   } catch (error) {
     console.error("Error getting top content:", error)
-    throw error
+    return []
   }
 }
 
 /**
  * Get engagement metrics by type
  */
-export async function getEngagementByType(days = 30) {
+export async function getEngagementByType() {
   try {
-    const query = `
+    const result = await executeQuery(`
       SELECT 
         event_type,
         COUNT(*) as count
       FROM analytics.user_engagement
-      WHERE event_timestamp >= NOW() - INTERVAL '${days} days'
       GROUP BY event_type
       ORDER BY count DESC
-    `
+    `)
 
-    return await executeQuery(query)
+    return (
+      result.map((row) => ({
+        type: row.event_type,
+        count: Number.parseInt(row.count),
+      })) || []
+    )
   } catch (error) {
     console.error("Error getting engagement by type:", error)
-    throw error
+    return []
+  }
+}
+
+/**
+ * Get content performance by creator
+ */
+export async function getContentByCreator(creatorId: string) {
+  try {
+    const result = await executeQuery(
+      `
+      SELECT 
+        c.id,
+        c.title,
+        c.content_type,
+        COUNT(cv.id) as view_count,
+        COALESCE(SUM(t.amount), 0) as revenue
+      FROM content c
+      LEFT JOIN analytics.content_views cv ON c.id = cv.content_id
+      LEFT JOIN analytics.transactions t ON c.id = t.content_id
+      WHERE c.creator_id = $1
+      GROUP BY c.id, c.title, c.content_type
+      ORDER BY view_count DESC
+    `,
+      [creatorId],
+    )
+
+    return (
+      result.map((row) => ({
+        id: row.id,
+        title: row.title,
+        contentType: row.content_type,
+        viewCount: Number.parseInt(row.view_count),
+        revenue: Number.parseFloat(row.revenue) || 0,
+      })) || []
+    )
+  } catch (error) {
+    console.error("Error getting content by creator:", error)
+    return []
   }
 }
