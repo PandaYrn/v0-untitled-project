@@ -46,7 +46,7 @@ export async function seedAnalyticsData() {
         platform TEXT,
         country TEXT,
         referrer TEXT,
-        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        view_timestamp TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       )
     `)
 
@@ -57,7 +57,7 @@ export async function seedAnalyticsData() {
         event_type TEXT NOT NULL,
         content_id TEXT,
         metadata JSONB,
-        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        event_timestamp TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       )
     `)
 
@@ -73,7 +73,7 @@ export async function seedAnalyticsData() {
         platform_fee DECIMAL(10, 2),
         creator_revenue DECIMAL(10, 2),
         payment_method TEXT,
-        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        transaction_timestamp TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       )
     `)
 
@@ -155,16 +155,16 @@ export async function seedAnalyticsData() {
       const platform = getRandomItem(platforms)
       const country = getRandomItem(countries)
       const referrer = getRandomItem(referrers)
-      const createdAt = getRandomDate()
+      const viewTimestamp = getRandomDate()
 
       const query = `
         INSERT INTO analytics.content_views 
-        (content_id, user_id, session_id, view_duration, platform, country, referrer, created_at)
+        (content_id, user_id, session_id, view_duration, platform, country, referrer, view_timestamp)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       `
 
       viewsPromises.push(
-        executeQuery(query, [contentId, userId, sessionId, viewDuration, platform, country, referrer, createdAt]),
+        executeQuery(query, [contentId, userId, sessionId, viewDuration, platform, country, referrer, viewTimestamp]),
       )
     }
 
@@ -186,15 +186,15 @@ export async function seedAnalyticsData() {
               duration: getRandomNumber(1, 300),
             })
           : null
-      const createdAt = getRandomDate()
+      const eventTimestamp = getRandomDate()
 
       const query = `
         INSERT INTO analytics.user_engagement 
-        (user_id, event_type, content_id, metadata, created_at)
+        (user_id, event_type, content_id, metadata, event_timestamp)
         VALUES ($1, $2, $3, $4, $5)
       `
 
-      engagementPromises.push(executeQuery(query, [userId, eventType, contentId, metadata, createdAt]))
+      engagementPromises.push(executeQuery(query, [userId, eventType, contentId, metadata, eventTimestamp]))
     }
 
     await Promise.all(engagementPromises)
@@ -214,12 +214,12 @@ export async function seedAnalyticsData() {
       const platformFee = (Number.parseFloat(amount) * 0.05).toFixed(2)
       const creatorRevenue = (Number.parseFloat(amount) * 0.95).toFixed(2)
       const paymentMethod = getRandomItem(paymentMethods)
-      const createdAt = getRandomDate()
+      const transactionTimestamp = getRandomDate()
 
       const query = `
         INSERT INTO analytics.transactions 
         (transaction_id, user_id, content_id, event_id, transaction_type, 
-         amount, platform_fee, creator_revenue, payment_method, created_at)
+         amount, platform_fee, creator_revenue, payment_method, transaction_timestamp)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       `
 
@@ -234,7 +234,7 @@ export async function seedAnalyticsData() {
           platformFee,
           creatorRevenue,
           paymentMethod,
-          createdAt,
+          transactionTimestamp,
         ]),
       )
     }
@@ -247,7 +247,9 @@ export async function seedAnalyticsData() {
 
     await executeQuery("CREATE INDEX IF NOT EXISTS idx_content_views_content_id ON analytics.content_views(content_id)")
     await executeQuery("CREATE INDEX IF NOT EXISTS idx_content_views_user_id ON analytics.content_views(user_id)")
-    await executeQuery("CREATE INDEX IF NOT EXISTS idx_content_views_created_at ON analytics.content_views(created_at)")
+    await executeQuery(
+      "CREATE INDEX IF NOT EXISTS idx_content_views_timestamp ON analytics.content_views(view_timestamp)",
+    )
 
     await executeQuery("CREATE INDEX IF NOT EXISTS idx_user_engagement_user_id ON analytics.user_engagement(user_id)")
     await executeQuery(
@@ -256,10 +258,16 @@ export async function seedAnalyticsData() {
     await executeQuery(
       "CREATE INDEX IF NOT EXISTS idx_user_engagement_event_type ON analytics.user_engagement(event_type)",
     )
+    await executeQuery(
+      "CREATE INDEX IF NOT EXISTS idx_user_engagement_timestamp ON analytics.user_engagement(event_timestamp)",
+    )
 
     await executeQuery("CREATE INDEX IF NOT EXISTS idx_transactions_user_id ON analytics.transactions(user_id)")
     await executeQuery("CREATE INDEX IF NOT EXISTS idx_transactions_content_id ON analytics.transactions(content_id)")
     await executeQuery("CREATE INDEX IF NOT EXISTS idx_transactions_type ON analytics.transactions(transaction_type)")
+    await executeQuery(
+      "CREATE INDEX IF NOT EXISTS idx_transactions_timestamp ON analytics.transactions(transaction_timestamp)",
+    )
 
     console.log("Indexes created successfully")
 

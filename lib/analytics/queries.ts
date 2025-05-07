@@ -11,21 +11,21 @@ export async function getOverviewMetrics() {
           COUNT(*) as total_views,
           COUNT(DISTINCT user_id) as unique_viewers
         FROM analytics.content_views
-        WHERE created_at >= NOW() - INTERVAL '30 days'
+        WHERE view_timestamp >= NOW() - INTERVAL '30 days'
       ),
       revenue_stats AS (
         SELECT 
           SUM(amount) as total_revenue,
           COUNT(*) as transaction_count
         FROM analytics.transactions
-        WHERE created_at >= NOW() - INTERVAL '30 days'
+        WHERE transaction_timestamp >= NOW() - INTERVAL '30 days'
       ),
       engagement_stats AS (
         SELECT 
           COUNT(*) as total_engagements,
           COUNT(DISTINCT user_id) as engaged_users
         FROM analytics.user_engagement
-        WHERE created_at >= NOW() - INTERVAL '30 days'
+        WHERE event_timestamp >= NOW() - INTERVAL '30 days'
       )
       SELECT 
         COALESCE(vs.total_views, 0) as total_views,
@@ -80,7 +80,7 @@ export async function getDailyViews() {
         COALESCE(COUNT(cv.id), 0) as views
       FROM date_series ds
       LEFT JOIN analytics.content_views cv 
-        ON ds.date = date_trunc('day', cv.created_at)::date
+        ON ds.date = date_trunc('day', cv.view_timestamp)::date
       GROUP BY ds.date
       ORDER BY ds.date
     `
@@ -108,7 +108,7 @@ export async function getDailyRevenue() {
         COALESCE(SUM(t.amount), 0) as revenue
       FROM date_series ds
       LEFT JOIN analytics.transactions t 
-        ON ds.date = date_trunc('day', t.created_at)::date
+        ON ds.date = date_trunc('day', t.transaction_timestamp)::date
       GROUP BY ds.date
       ORDER BY ds.date
     `

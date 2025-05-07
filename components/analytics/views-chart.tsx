@@ -1,48 +1,67 @@
 "use client"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts"
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts"
 
-interface ViewsChartProps {
-  data: Array<{
-    date: string
-    views: number
-    unique_viewers: number
-  }>
-}
+export function ViewsChart({ data }) {
+  // Ensure data is an array and handle undefined values
+  const safeData = Array.isArray(data) ? data : []
 
-export function ViewsChart({ data }: ViewsChartProps) {
-  // Format the data for the chart
-  const chartData = data.map((item) => ({
-    date: new Date(item.date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-    views: Number(item.views),
-    unique_viewers: Number(item.unique_viewers),
-  }))
+  // Add default data if empty
+  const chartData =
+    safeData.length > 0
+      ? safeData
+      : [
+          { date: "2023-01-01", views: 0 },
+          { date: "2023-01-02", views: 0 },
+        ]
 
   return (
     <Card className="col-span-4">
       <CardHeader>
         <CardTitle>Content Views</CardTitle>
-        <CardDescription>Daily view trends over time</CardDescription>
+        <CardDescription>Daily view count for the last 30 days</CardDescription>
       </CardHeader>
       <CardContent className="h-[300px]">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart
-            data={chartData}
-            margin={{
-              top: 5,
-              right: 30,
-              left: 20,
-              bottom: 5,
-            }}
-          >
+          <LineChart data={chartData}>
             <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="date" />
+            <XAxis
+              dataKey="date"
+              tickFormatter={(value) => {
+                try {
+                  const date = new Date(value)
+                  return date.toLocaleDateString(undefined, { month: "short", day: "numeric" })
+                } catch (e) {
+                  return value
+                }
+              }}
+            />
             <YAxis />
-            <Tooltip />
-            <Legend />
-            <Line type="monotone" dataKey="views" stroke="#8884d8" activeDot={{ r: 8 }} name="Total Views" />
-            <Line type="monotone" dataKey="unique_viewers" stroke="#82ca9d" name="Unique Viewers" />
+            <Tooltip
+              formatter={(value) => [Number(value).toLocaleString(), "Views"]}
+              labelFormatter={(label) => {
+                try {
+                  const date = new Date(label)
+                  return date.toLocaleDateString(undefined, {
+                    weekday: "long",
+                    year: "numeric",
+                    month: "long",
+                    day: "numeric",
+                  })
+                } catch (e) {
+                  return label
+                }
+              }}
+            />
+            <Line
+              type="monotone"
+              dataKey="views"
+              stroke="#8884d8"
+              strokeWidth={2}
+              dot={{ r: 4 }}
+              activeDot={{ r: 6 }}
+            />
           </LineChart>
         </ResponsiveContainer>
       </CardContent>

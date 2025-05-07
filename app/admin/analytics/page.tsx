@@ -16,6 +16,10 @@ import { RevenueChart } from "@/components/analytics/revenue-chart"
 import { ContentPerformanceTable } from "@/components/analytics/content-performance-table"
 import { EngagementMetrics } from "@/components/analytics/engagement-metrics"
 
+// Force dynamic rendering to avoid static generation errors
+export const dynamic = "force-dynamic"
+export const revalidate = 0
+
 // Loading components
 function MetricsLoading() {
   return (
@@ -66,6 +70,7 @@ async function AnalyticsOverview() {
     const metrics = await getOverviewMetrics()
     return <OverviewMetrics metrics={metrics} />
   } catch (error) {
+    console.error("Error in AnalyticsOverview:", error)
     return <ErrorDisplay message="Failed to load overview metrics" />
   }
 }
@@ -75,6 +80,7 @@ async function ViewsAnalytics() {
     const data = await getDailyViews()
     return <ViewsChart data={data} />
   } catch (error) {
+    console.error("Error in ViewsAnalytics:", error)
     return <ErrorDisplay message="Failed to load views chart" />
   }
 }
@@ -84,6 +90,7 @@ async function RevenueAnalytics() {
     const data = await getDailyRevenue()
     return <RevenueChart data={data} />
   } catch (error) {
+    console.error("Error in RevenueAnalytics:", error)
     return <ErrorDisplay message="Failed to load revenue chart" />
   }
 }
@@ -93,6 +100,7 @@ async function ContentAnalytics() {
     const data = await getTopContent()
     return <ContentPerformanceTable data={data} />
   } catch (error) {
+    console.error("Error in ContentAnalytics:", error)
     return <ErrorDisplay message="Failed to load content performance" />
   }
 }
@@ -102,6 +110,7 @@ async function EngagementAnalytics() {
     const data = await getEngagementByType()
     return <EngagementMetrics data={data} />
   } catch (error) {
+    console.error("Error in EngagementAnalytics:", error)
     return <ErrorDisplay message="Failed to load engagement metrics" />
   }
 }
