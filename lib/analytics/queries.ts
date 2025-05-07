@@ -1,102 +1,119 @@
-import { sql, executeQuery } from "@/lib/neon/client"
+"use server"
 
-// Types for analytics data
-export type OverviewMetrics = {
-  totalViews: number
-  totalRevenue: number
-  totalEngagements: number
-  activeUsers: number
-}
+import { executeQuery } from "@/lib/neon/client"
 
-export type DailyViewsData = {
-  date: string
-  count: number
-}
-
-export type DailyRevenueData = {
-  date: string
-  amount: number
-}
-
-export type ContentPerformance = {
-  contentId: string
-  title: string
-  views: number
-  revenue: number
-  engagements: number
-}
-
-export type EngagementByType = {
-  type: string
-  count: number
-}
-
-// Get overview metrics
-export async function getOverviewMetrics(): Promise<OverviewMetrics> {
+// Get overview metrics for the dashboard
+export async function getOverviewMetrics() {
   try {
-    const [viewsResult, revenueResult, engagementsResult, usersResult] = await Promise.all([
-      executeQuery<{ count: number }>(
-        `SELECT COUNT(*) as count FROM analytics.content_views`
+    const query = `
+      WITH view_stats AS (
+        SELECT 
+          COUNT(*) as total_views,
+          COUNT(DISTINCT user_id) as unique_viewers
+        FROM analytics.content_views
+        WHERE created_at >= NOW() - INTERVAL '30 days'
       ),
-      executeQuery<{ sum: number }>(
-        `SELECT COALESCE(SUM(amount), 0) as sum FROM analytics.transactions`
+      revenue_stats AS (
+        SELECT 
+          SUM(amount) as total_revenue,
+          COUNT(*) as transaction_count
+        FROM analytics.transactions
+        WHERE created_at >= NOW() - INTERVAL '30 days'
       ),
-      executeQuery<{ count: number }>(
-        `SELECT COUNT(*) as count FROM analytics.user_engagements`
-      ),
-      executeQuery<{ count: number }>(
-        `SELECT COUNT(DISTINCT user_id) as count FROM analytics.content_views WHERE created_at > NOW() - INTERVAL '30 days'`
-      ),
-    ])
+      engagement_stats AS (
+        SELECT 
+          COUNT(*) as total_engagements,
+          COUNT(DISTINCT user_id) as engaged_users
+        FROM analytics.user_engagement
+        WHERE created_at >= NOW() - INTERVAL '30 days'
+      )
+      SELECT 
+        COALESCE(vs.total_views, 0) as total_views,
+        COALESCE(vs.unique_viewers, 0) as unique_viewers,
+        COALESCE(rs.total_revenue, 0) as total_revenue,
+        COALESCE(rs.transaction_count, 0) as transaction_count,
+        COALESCE(es.total_engagements, 0) as total_engagements,
+        COALESCE(es.engaged_users, 0) as engaged_users
+      FROM 
+        view_stats vs,
+        revenue_stats rs,
+        engagement_stats es
+    `
 
-    return {
-      totalViews: viewsResult[0]?.count || 0,
-      totalRevenue: revenueResult[0]?.sum || 0,
-      totalEngagements: engagementsResult[0]?.count || 0,
-      activeUsers: usersResult[0]?.count || 0,
-    }
+    const result = await executeQuery(query)
+    return (
+      result[0] || {
+        total_views: 0,
+        unique_viewers: 0,
+        total_revenue: 0,
+        transaction_count: 0,
+        total_engagements: 0,
+        engaged_users: 0,
+      }
+    )
   } catch (error) {
     console.error("Error getting overview metrics:", error)
     return {
-      totalViews: 0,
-      totalRevenue: 0,
-      totalEngagements: 0,
-      activeUsers: 0,
+      total_views: 0,
+      unique_viewers: 0,
+      total_revenue: 0,
+      transaction_count: 0,
+      total_engagements: 0,
+      engaged_users: 0,
     }
   }
 }
 
-// Get daily views for the last 30 days
-export async function getDailyViews(): Promise<DailyViewsData[]> {
+// Get daily views for charting
+export async function getDailyViews() {
   try {
-    return await executeQuery<DailyViewsData>(
-      `SELECT 
-        TO_CHAR(date, 'YYYY-MM-DD') as date,
-        COUNT as count
-      FROM analytics.daily_metrics
-      WHERE metric_type = 'views'
-      AND date > NOW() - INTERVAL '30 days'
-      ORDER BY date ASC`
-    )
+    const query = `
+      WITH date_series AS (
+        SELECT generate_series(
+          current_date - interval '29 days',
+          current_date,
+          interval '1 day'
+        )::date as date
+      )
+      SELECT 
+        to_char(ds.date, 'YYYY-MM-DD') as date,
+        COALESCE(COUNT(cv.id), 0) as views
+      FROM date_series ds
+      LEFT JOIN analytics.content_views cv 
+        ON ds.date = date_trunc('day', cv.created_at)::date
+      GROUP BY ds.date
+      ORDER BY ds.date
+    `
+
+    return await executeQuery(query)
   } catch (error) {
     console.error("Error getting daily views:", error)
     return []
   }
 }
 
-// Get daily revenue for the last 30 days
-export async function getDailyRevenue(): Promise<DailyRevenueData[]> {
+// Get daily revenue for charting
+export async function getDailyRevenue() {
   try {
-    return await executeQuery<DailyRevenueData>(
-      `SELECT 
-        TO_CHAR(date, 'YYYY-MM-DD') as date,
-        SUM(value) as amount
-      FROM analytics.daily_metrics
-      WHERE metric_type = 'revenue'
-      AND date > NOW() - INTERVAL '30 days'
-      GROUP BY date
-      ORDER BY date ASC`
-    )
+    const query = `
+      WITH date_series AS (
+        SELECT generate_series(
+          current_date - interval '29 days',
+          current_date,
+          interval '1 day'
+        )::date as date
+      )
+      SELECT 
+        to_char(ds.date, 'YYYY-MM-DD') as date,
+        COALESCE(SUM(t.amount), 0) as revenue
+      FROM date_series ds
+      LEFT JOIN analytics.transactions t 
+        ON ds.date = date_trunc('day', t.created_at)::date
+      GROUP BY ds.date
+      ORDER BY ds.date
+    `
+
+    return await executeQuery(query)
   } catch (error) {
     console.error("Error getting daily revenue:", error)
     return []
@@ -104,45 +121,43 @@ export async function getDailyRevenue(): Promise<DailyRevenueData[]> {
 }
 
 // Get top performing content
-export async function getTopContent(limit: number = 10): Promise<ContentPerformance[]> {
+export async function getTopContent(limit = 10) {
   try {
-    return await executeQuery<ContentPerformance>(
-      `SELECT 
-        cv.content_id as "contentId",
-        COALESCE(c.title, cv.content_id) as title,
-        COUNT(DISTINCT cv.id) as views,
+    const query = `
+      SELECT 
+        cv.content_id,
+        COUNT(*) as views,
+        COUNT(DISTINCT cv.user_id) as unique_viewers,
         COALESCE(SUM(t.amount), 0) as revenue,
         COUNT(DISTINCT ue.id) as engagements
       FROM analytics.content_views cv
       LEFT JOIN analytics.transactions t ON cv.content_id = t.content_id
-      LEFT JOIN analytics.user_engagements ue ON cv.content_id = ue.content_id
-      LEFT JOIN (
-        SELECT id, title FROM content.music
-        UNION ALL
-        SELECT id, title FROM content.movies
-      ) c ON cv.content_id = c.id
-      GROUP BY cv.content_id, c.title
+      LEFT JOIN analytics.user_engagement ue ON cv.content_id = ue.content_id
+      GROUP BY cv.content_id
       ORDER BY views DESC
-      LIMIT $1`,
-      [limit]
-    )
+      LIMIT $1
+    `
+
+    return await executeQuery(query, [limit])
   } catch (error) {
     console.error("Error getting top content:", error)
     return []
   }
 }
 
-// Get engagement by type
-export async function getEngagementByType(): Promise<EngagementByType[]> {
+// Get engagement metrics by type
+export async function getEngagementByType() {
   try {
-    return await executeQuery<EngagementByType>(
-      `SELECT 
-        engagement_type as type,
+    const query = `
+      SELECT 
+        event_type,
         COUNT(*) as count
-      FROM analytics.user_engagements
-      GROUP BY engagement_type
-      ORDER BY count DESC`
-    )
+      FROM analytics.user_engagement
+      GROUP BY event_type
+      ORDER BY count DESC
+    `
+
+    return await executeQuery(query)
   } catch (error) {
     console.error("Error getting engagement by type:", error)
     return []
