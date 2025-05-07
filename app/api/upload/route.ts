@@ -27,14 +27,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate file type
-    const allowedTypes: Record<string, string[]> = {
+    const allowedTypes = {
       media: ["audio/mpeg", "audio/wav", "video/mp4", "video/quicktime"],
       thumbnail: ["image/jpeg", "image/png", "image/webp"],
       avatar: ["image/jpeg", "image/png", "image/webp"],
-    }
-    \
-    if (!allowedTypes[type]?.includes(file.type)) {
-      "image/png\", \"image/webp\"]
     }
 
     if (!allowedTypes[type]?.includes(file.type)) {
@@ -45,7 +41,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate file size
-    const maxSizes: Record<string, number> = {
+    const maxSizes = {
       media: 100 * 1024 * 1024, // 100MB
       thumbnail: 5 * 1024 * 1024, // 5MB
       avatar: 2 * 1024 * 1024, // 2MB

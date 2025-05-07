@@ -1,222 +1,130 @@
 import { Suspense } from "react"
-import {
-  getOverviewMetrics,
-  getDailyViews,
-  getDailyRevenue,
-  getTopContent,
-  getEngagementByType,
-} from "@/lib/analytics/queries"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { OverviewMetrics } from "@/components/analytics/overview-metrics"
 import { ViewsChart } from "@/components/analytics/views-chart"
 import { RevenueChart } from "@/components/analytics/revenue-chart"
 import { ContentPerformanceTable } from "@/components/analytics/content-performance-table"
 import { EngagementMetrics } from "@/components/analytics/engagement-metrics"
-import { Skeleton } from "@/components/ui/skeleton"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { AlertCircle } from "lucide-react"
+import { getOverviewMetrics, getDailyViews, getDailyRevenue, getTopContent, getEngagementByType } from "@/lib/analytics/queries"
 
-// Loading components
-function MetricsLoading() {
+export const dynamic = "force-dynamic"
+export const revalidate = 0
+
+export default async function AnalyticsDashboard() {
+  // Fetch all data with error handling
+  let overviewMetrics = { totalViews: 0, totalRevenue: 0, totalEngagements: 0, activeUsers: 0 }
+  let dailyViews = []
+  let dailyRevenue = []
+  let topContent = []
+  let engagementByType = []
+  
+  try {
+    overviewMetrics = await getOverviewMetrics()
+  } catch (error) {
+    console.error("Error getting overview metrics:", error)
+  }
+  
+  try {
+    dailyViews = await getDailyViews()
+  } catch (error) {
+    console.error("Error getting daily views:", error)
+  }
+  
+  try {
+    dailyRevenue = await getDailyRevenue()
+  } catch (error) {
+    console.error("Error getting daily revenue:", error)
+  }
+  
+  try {
+    topContent = await getTopContent(10)
+  } catch (error) {
+    console.error("Error getting top content:", error)
+  }
+  
+  try {
+    engagementByType = await getEngagementByType()
+  } catch (error) {
+    console.error("Error getting engagement by type:", error)
+  }
+
   return (
-    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-      {[1, 2, 3, 4].map((i) => (
-        <Card key={i}>
-          <CardHeader className="pb-2">
-            <Skeleton className="h-4 w-32" />
-          </CardHeader>
-          <CardContent>
-            <Skeleton className="h-8 w-24 mb-1" />
-            <Skeleton className="h-3 w-40" />
-          </CardContent>
-        </Card>
-      ))}
-    </div>
-  )
-}
-
-function ChartLoading() {
-  return (
-    <Card className="col-span-4">
-      <CardHeader>
-        <Skeleton className="h-5 w-40 mb-1" />
-        <Skeleton className="h-4 w-60" />
-      </CardHeader>
-      <CardContent className="h-[300px]">
-        <Skeleton className="h-full w-full" />
-      </CardContent>
-    </Card>
-  )
-}
-
-function TableLoading() {
-  return (
-    <Card className="col-span-6">
-      <CardHeader>
-        <Skeleton className="h-5 w-40 mb-1" />
-        <Skeleton className="h-4 w-60" />
-      </CardHeader>
-      <CardContent>
-        <Skeleton className="h-[300px] w-full" />
-      </CardContent>
-    </Card>
-  )
-}
-
-// Error component
-function ErrorDisplay({ message }: { message: string }) {
-  return (
-    <Alert variant="destructive">
-      <AlertCircle className="h-4 w-4" />
-      <AlertTitle>Error</AlertTitle>
-      <AlertDescription>{message}</AlertDescription>
-    </Alert>
-  )
-}
-
-// Fallback components with error handling
-function OverviewMetricsFallback() {
-  try {
-    return <AnalyticsOverview />
-  } catch (error) {
-    return <ErrorDisplay message="Failed to load overview metrics" />
-  }
-}
-
-function ViewsAnalyticsFallback() {
-  try {
-    return <ViewsAnalytics />
-  } catch (error) {
-    return <ErrorDisplay message="Failed to load views analytics" />
-  }
-}
-
-function RevenueAnalyticsFallback() {
-  try {
-    return <RevenueAnalytics />
-  } catch (error) {
-    return <ErrorDisplay message="Failed to load revenue analytics" />
-  }
-}
-
-function ContentAnalyticsFallback() {
-  try {
-    return <ContentAnalytics />
-  } catch (error) {
-    return <ErrorDisplay message="Failed to load content analytics" />
-  }
-}
-
-function EngagementAnalyticsFallback() {
-  try {
-    return <EngagementAnalytics />
-  } catch (error) {
-    return <ErrorDisplay message="Failed to load engagement analytics" />
-  }
-}
-
-// Analytics dashboard components
-async function AnalyticsOverview() {
-  try {
-    const metrics = await getOverviewMetrics()
-    return <OverviewMetrics metrics={metrics} />
-  } catch (error) {
-    console.error("Error in AnalyticsOverview:", error)
-    return <ErrorDisplay message="Failed to load overview metrics" />
-  }
-}
-
-async function ViewsAnalytics() {
-  try {
-    const data = await getDailyViews()
-    return <ViewsChart data={data} />
-  } catch (error) {
-    console.error("Error in ViewsAnalytics:", error)
-    return <ErrorDisplay message="Failed to load views chart" />
-  }
-}
-
-async function RevenueAnalytics() {
-  try {
-    const data = await getDailyRevenue()
-    return <RevenueChart data={data} />
-  } catch (error) {
-    console.error("Error in RevenueAnalytics:", error)
-    return <ErrorDisplay message="Failed to load revenue chart" />
-  }
-}
-
-async function ContentAnalytics() {
-  try {
-    const data = await getTopContent()
-    return <ContentPerformanceTable data={data} />
-  } catch (error) {
-    console.error("Error in ContentAnalytics:", error)
-    return <ErrorDisplay message="Failed to load content performance" />
-  }
-}
-
-async function EngagementAnalytics() {
-  try {
-    const data = await getEngagementByType()
-    return <EngagementMetrics data={data} />
-  } catch (error) {
-    console.error("Error in EngagementAnalytics:", error)
-    return <ErrorDisplay message="Failed to load engagement metrics" />
-  }
-}
-
-export default function AnalyticsDashboard() {
-  return (
-    <div className="container py-8">
-      <h1 className="text-3xl font-bold mb-2">Analytics Dashboard</h1>
-      <p className="text-muted-foreground mb-8">Track platform performance, content engagement, and revenue</p>
-
-      <Card className="mb-8">
-        <CardHeader>
-          <CardTitle>Database Configuration</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">
-            To use the analytics dashboard, make sure you have set up the Neon PostgreSQL database and added the correct
-            environment variables. You can seed the database with sample data from the admin panel.
-          </p>
-          <div className="mt-4">
-            <a href="/admin/seed-analytics" className="text-primary hover:underline">
-              Go to Database Seeding Page
-            </a>
-          </div>
-        </CardContent>
-      </Card>
-
-      <div className="space-y-8">
-        {/* Overview Metrics */}
-        <Suspense fallback={<MetricsLoading />}>
-          <OverviewMetricsFallback />
-        </Suspense>
-
-        {/* Charts */}
-        <div className="grid gap-4 md:grid-cols-8">
-          <Suspense fallback={<ChartLoading />}>
-            <ViewsAnalyticsFallback />
-          </Suspense>
-
-          <Suspense fallback={<ChartLoading />}>
-            <RevenueAnalyticsFallback />
-          </Suspense>
-        </div>
-
-        {/* Content Performance */}
-        <div className="grid gap-4 md:grid-cols-8">
-          <Suspense fallback={<TableLoading />}>
-            <ContentAnalyticsFallback />
-          </Suspense>
-
-          <Suspense fallback={<ChartLoading />}>
-            <EngagementAnalyticsFallback />
-          </Suspense>
-        </div>
+    <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-3xl font-bold tracking-tight">Analytics Dashboard</h2>
       </div>
+      
+      <Tabs defaultValue="overview" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="content">Content</TabsTrigger>
+          <TabsTrigger value="revenue">Revenue</TabsTrigger>
+          <TabsTrigger value="engagement">Engagement</TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="overview" className="space-y-4">
+          <OverviewMetrics metrics={overviewMetrics} />
+          
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
+            <Card className="col-span-4">
+              <CardHeader>
+                <CardTitle>Views</CardTitle>
+                <CardDescription>Daily content views for the last 30 days</CardDescription>
+              </CardHeader>
+              <CardContent className="pl-2">
+                <ViewsChart data={dailyViews} />
+              </CardContent>
+            </Card>
+            
+            <Card className="col-span-3">
+              <CardHeader>
+                <CardTitle>Revenue</CardTitle>
+                <CardDescription>Daily revenue for the last 30 days</CardDescription>
+              </CardHeader>
+              <CardContent className="pl-2">
+                <RevenueChart data={dailyRevenue} />
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+        
+        <TabsContent value="content" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Content Performance</CardTitle>
+              <CardDescription>Top performing content by views, revenue, and engagement</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ContentPerformanceTable data={topContent} />
+            </CardContent>
+          </Card>
+        </TabsContent>
+        
+        <TabsContent value="revenue" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Revenue Breakdown</CardTitle>
+              <CardDescription>Revenue by day for the last 30 days</CardDescription>
+            </CardHeader>
+            <CardContent className="pl-2">
+              <RevenueChart data={dailyRevenue} />
+            </CardContent>
+          </Card>
+        </TabsContent>
+        
+        <TabsContent value="engagement" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Engagement Metrics</CardTitle>
+              <CardDescription>Breakdown of user engagement by type</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <EngagementMetrics data={engagementByType} />
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }

@@ -1,336 +1,331 @@
-import { executeQuery } from "@/lib/neon/client"
+import { sql, testConnection } from "@/lib/neon/client"
 
-/**
- * Seed the analytics database with sample data
- */
-export async function seedAnalyticsData() {
+// Function to generate a random date within the last 30 days
+function randomRecentDate() {
+  const now = new Date()
+  const daysAgo = Math.floor(Math.random() * 30)
+  now.setDate(now.getDate() - daysAgo)
+  return now.toISOString()
+}
+
+// Function to generate a random amount between min and max
+function randomAmount(min: number, max: number) {
+  return Number.parseFloat((Math.random() * (max - min) + min).toFixed(2))
+}
+
+// Function to generate a random user ID
+function randomUserId() {
+  return `user_${Math.floor(Math.random() * 1000)}`
+}
+
+// Function to generate a random content ID
+function randomContentId() {
+  const contentType = Math.random() > 0.5 ? "music" : "movie"
+  return `${contentType}_${Math.floor(Math.random() * 100)}`
+}
+
+// Function to generate a random engagement type
+function randomEngagementType() {
+  const types = ["like", "comment", "share", "save", "duration"]
+  return types[Math.floor(Math.random() * types.length)]
+}
+
+// Function to generate a random transaction type
+function randomTransactionType() {
+  const types = ["purchase", "rental", "subscription", "royalty"]
+  return types[Math.floor(Math.random() * types.length)]
+}
+
+// Function to get a random element from an array
+function getRandomElement<ElementType>(array: ElementType[]): ElementType {
+  return array[Math.floor(Math.random() * array.length)]
+}
+
+// Create analytics schema and tables
+async function createSchema() {
   try {
-    console.log("Starting analytics data seeding...")
-    
-    // Check if database connection is working
-    try {
-      await executeQuery("SELECT 1")
-      console.log("Database connection successful")
-    } catch (error) {
-      console.error("Database connection failed:", error)
-      return {
-        success: false,
-        error: "Database connection failed",
-        details: error.message
-      }
-    }
-    
-    // Create schema if it doesn't exist
-    try {
-      await executeQuery(`
-        CREATE SCHEMA IF NOT EXISTS analytics;
-      `)
-      console.log("Analytics schema created or already exists")
-    } catch (error) {
-      console.error("Failed to create schema:", error)
-      return {
-        success: false,
-        error: "Failed to create schema",
-        details: error.message
-      }
-    }
-    
-    // Create tables if they don't exist
-    try {
-      // Content views table
-      await executeQuery(`
-        CREATE TABLE IF NOT EXISTS analytics.content_views (
-          id SERIAL PRIMARY KEY,
-          content_id TEXT NOT NULL,
-          user_id TEXT,
-          view_duration INTEGER,
-          platform TEXT,
-          country TEXT,
-          referrer TEXT,
-          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-        );
-      `)
-      
-      // User engagement table
-      await executeQuery(`
-        CREATE TABLE IF NOT EXISTS analytics.user_engagement (
-          id SERIAL PRIMARY KEY,
-          user_id TEXT NOT NULL,
-          event_type TEXT NOT NULL,
-          content_id TEXT,
-          metadata JSONB,
-          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-        );
-      `)
-      
-      // Transactions table
-      await executeQuery(`
-        CREATE TABLE IF NOT EXISTS analytics.transactions (
-          id SERIAL PRIMARY KEY,
-          user_id TEXT NOT NULL,
-          content_id TEXT,
-          event_id TEXT,
-          transaction_type TEXT NOT NULL,
-          amount DECIMAL(10, 2) NOT NULL,
-          currency TEXT NOT NULL,
-          payment_method TEXT,
-          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-        );
-      `)
-      
-      // Daily metrics table
-      await executeQuery(`
-        CREATE TABLE IF NOT EXISTS analytics.daily_metrics (
-          id SERIAL PRIMARY KEY,
-          date DATE NOT NULL,
-          total_views INTEGER NOT NULL DEFAULT 0,
-          unique_viewers INTEGER NOT NULL DEFAULT 0,
-          total_revenue DECIMAL(10, 2) NOT NULL DEFAULT 0,
-          new_users INTEGER NOT NULL DEFAULT 0,
-          CONSTRAINT unique_date UNIQUE (date)
-        );
-      `)
-      
-      console.log("Analytics tables created or already exist")
-    } catch (error) {
-      console.error("Failed to create tables:", error)
-      return {
-        success: false,
-        error: "Failed to create tables",
-        details: error.message
-      }
-    }
-    
-    // Generate sample data
-    try {
-      // Sample content IDs
-      const contentIds = [
-        "c1b8c174-dd21-4b82-a9c1-f984e32dd3f7",
-        "7f8d9e10-c5a3-4b1d-8e7f-6a2b3c4d5e6f",
-        "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
-        "9a8b7c6d-5e4f-3a2b-1c0d-9e8f7a6b5c4d",
-        "5f4e3d2c-1b0a-9f8e-7d6c-5b4a3c2d1e0f"
-      ]
-      
-      // Sample user IDs
-      const userIds = [
-        "u1a2b3c4-d5e6-f7a8-b9c0-d1e2f3a4b5c6",
-        "u2b3c4d5-e6f7-a8b9-c0d1-e2f3a4b5c6d7",
-        "u3c4d5e6-f7a8-b9c0-d1e2-f3a4b5c6d7e8",
-        "u4d5e6f7-a8b9-c0d1-e2f3-a4b5c6d7e8f9",
-        "u5e6f7a8-b9c0-d1e2-f3a4-b5c6d7e8f9a0"
-      ]
-      
-      // Sample platforms
-      const platforms = ["web", "mobile", "desktop"]
-      
-      // Sample countries
-      const countries = ["US", "UK", "CA", "AU", "DE", "FR", "JP", "BR", "IN"]
-      
-      // Sample referrers
-      const referrers = [
-        "https://google.com",
-        "https://twitter.com",
-        "https://facebook.com",
-        "https://instagram.com",
-        "https://youtube.com",
-        "direct",
-        null
-      ]
-      
-      // Sample event types
-      const eventTypes = [
-        "like",
-        "comment",
-        "share",
-        "follow",
-        "playlist_add",
-        "download",
-        "subscribe"
-      ]
-      
-      // Sample transaction types
-      const transactionTypes = [
-        "purchase",
-        "subscription",
-        "rental",
-        "tip",
-        "nft_purchase",
-        "ticket_purchase"
-      ]
-      
-      // Sample payment methods
-      const paymentMethods = [
-        "credit_card",
-        "paypal",
-        "crypto",
-        "bank_transfer",
-        "mobile_payment"
-      ]
-      
-      // Generate random date within the last 30 days
-      const getRandomDate = () => {
-        const now = new Date()
-        const daysAgo = Math.floor(Math.random() * 30)
-        now.setDate(now.getDate() - daysAgo)
-        return now.toISOString()
-      }
-      
-      // Generate random number between min and max
-      const getRandomNumber = (min: number, max: number) => {
-        return Math.floor(Math.random() * (max - min + 1)) + min
-      }
-      
-      // Generate random element from array
-      const getRandomElement = <T>(array: T[]): T => {
-        return array[Math.floor(Math.random() * array.length)]
-      }
-      
-      // Clear existing data
-      await executeQuery(`TRUNCATE analytics.content_views CASCADE;`)
-      await executeQuery(`TRUNCATE analytics.user_engagement CASCADE;`)
-      await executeQuery(`TRUNCATE analytics.transactions CASCADE;`)
-      await executeQuery(`TRUNCATE analytics.daily_metrics CASCADE;`)
-      
-      console.log("Existing data cleared")
-      
-      // Generate content views
-      const viewsCount = 1000
-      for (let i = 0; i < viewsCount; i++) {
-        const contentId = getRandomElement(contentIds)
-        const userId = Math.random() > 0.3 ? getRandomElement(userIds) : null // 30% anonymous views
-        const viewDuration = getRandomNumber(10, 3600) // 10 seconds to 1 hour
-        const platform = getRandomElement(platforms)
-        const country = getRandomElement(countries)
-        const referrer = getRandomElement(referrers)
-        const createdAt = getRandomDate()
-        
-        await executeQuery(`
-          INSERT INTO analytics.content_views (
-            content_id, user_id, view_duration, platform, country, referrer, created_at
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7)
-        `, [contentId, userId, viewDuration, platform, country, referrer, createdAt])
-      }
-      
-      console.log(`${viewsCount} content views generated`)
-      
-      // Generate user engagement
-      const engagementCount = 500
-      for (let i = 0; i < engagementCount; i++) {
-        const userId = getRandomElement(userIds)
-        const eventType = getRandomElement(eventTypes)
-        const contentId = Math.random() > 0.1 ? getRandomElement(contentIds) : null
-        const metadata = {
-          value: getRandomNumber(1, 100),
-          details: `Sample ${eventType} event`
-        }
-        const createdAt = getRandomDate()
-        
-        await executeQuery(`
-          INSERT INTO analytics.user_engagement (
-            user_id, event_type, content_id, metadata, created_at
-          ) VALUES ($1, $2, $3, $4, $5)
-        `, [userId, eventType, contentId, JSON.stringify(metadata), createdAt])
-      }
-      
-      console.log(`${engagementCount} user engagement events generated`)
-      
-      // Generate transactions
-      const transactionsCount = 300
-      for (let i = 0; i < transactionsCount; i++) {
-        const userId = getRandomElement(userIds)
-        const transactionType = getRandomElement(transactionTypes)
-        const contentId = Math.random() > 0.2 ? getRandomElement(contentIds) : null
-        const eventId = Math.random() > 0.8 ? `event-${getRandomNumber(1000, 9999)}` : null
-        const amount = parseFloat((Math.random() * 100).toFixed(2))
-        const currency = "SUI"
-        const paymentMethod = getRandomElement(paymentMethods)
-        const createdAt = getRandomDate()
-        
-        await executeQuery(`
-          INSERT INTO analytics.transactions (
-            user_id, content_id, event_id, transaction_type, amount, currency, payment_method, created_at
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-        `, [userId, contentId, eventId, transactionType, amount, currency, paymentMethod, createdAt])
-      }
-      
-      console.log(`${transactionsCount} transactions generated`)
-      
-      // Generate daily metrics
-      await executeQuery(`
-        INSERT INTO analytics.daily_metrics (date, total_views, unique_viewers, total_revenue, new_users)
-        SELECT 
-          DATE(created_at) as date,
-          COUNT(*) as total_views,
-          COUNT(DISTINCT user_id) as unique_viewers,
-          0 as total_revenue,
-          0 as new_users
-        FROM analytics.content_views
-        GROUP BY DATE(created_at)
-      `)
-      
-      // Update revenue in daily metrics
-      await executeQuery(`
-        UPDATE analytics.daily_metrics dm
-        SET total_revenue = t.daily_revenue
-        FROM (
-          SELECT 
-            DATE(created_at) as date,
-            SUM(amount) as daily_revenue
-          FROM analytics.transactions
-          GROUP BY DATE(created_at)
-        ) t
-        WHERE dm.date = t.date
-      `)
-      
-      // Update new users in daily metrics (simplified)
-      await executeQuery(`
-        UPDATE analytics.daily_metrics
-        SET new_users = FLOOR(random() * 50)::int
-      `)
-      
-      console.log("Daily metrics generated")
-      
-      // Create indexes for better query performance
-      await executeQuery(`
-        CREATE INDEX IF NOT EXISTS idx_content_views_content_id ON analytics.content_views(content_id);
-        CREATE INDEX IF NOT EXISTS idx_content_views_user_id ON analytics.content_views(user_id);
-        CREATE INDEX IF NOT EXISTS idx_content_views_created_at ON analytics.content_views(created_at);
-        
-        CREATE INDEX IF NOT EXISTS idx_user_engagement_user_id ON analytics.user_engagement(user_id);
-        CREATE INDEX IF NOT EXISTS idx_user_engagement_event_type ON analytics.user_engagement(event_type);
-        CREATE INDEX IF NOT EXISTS idx_user_engagement_content_id ON analytics.user_engagement(content_id);
-        
-        CREATE INDEX IF NOT EXISTS idx_transactions_user_id ON analytics.transactions(user_id);
-        CREATE INDEX IF NOT EXISTS idx_transactions_content_id ON analytics.transactions(content_id);
-        CREATE INDEX IF NOT EXISTS idx_transactions_transaction_type ON analytics.transactions(transaction_type);
-      `)
-      
-      console.log("Indexes created")
-      
-      return {
-        success: true,
-        message: "Analytics data seeded successfully",
-        stats: {
-          views: viewsCount,
-          engagements: engagementCount,
-          transactions: transactionsCount
-        }
-      }
-    } catch (error) {
-      console.error("Failed to generate sample data:", error)
-      return {
-        success: false,
-        error: "Failed to generate sample data",
-        details: error.message
-      }
-    }
+    console.log("Creating analytics schema and tables...")
+
+    // Create schema
+    await sql`CREATE SCHEMA IF NOT EXISTS analytics`
+
+    // Create content_views table
+    await sql`
+      CREATE TABLE IF NOT EXISTS analytics.content_views (
+        id SERIAL PRIMARY KEY,
+        content_id TEXT NOT NULL,
+        content_type TEXT NOT NULL,
+        user_id TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        session_id TEXT,
+        referrer TEXT,
+        device TEXT
+      )
+    `
+
+    // Create user_engagements table
+    await sql`
+      CREATE TABLE IF NOT EXISTS analytics.user_engagements (
+        id SERIAL PRIMARY KEY,
+        content_id TEXT NOT NULL,
+        user_id TEXT,
+        engagement_type TEXT NOT NULL,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        value TEXT
+      )
+    `
+
+    // Create transactions table
+    await sql`
+      CREATE TABLE IF NOT EXISTS analytics.transactions (
+        id SERIAL PRIMARY KEY,
+        content_id TEXT NOT NULL,
+        user_id TEXT,
+        transaction_type TEXT NOT NULL,
+        amount DECIMAL(10, 2) NOT NULL,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        status TEXT DEFAULT 'completed'
+      )
+    `
+
+    // Create daily_metrics table for aggregated data
+    await sql`
+      CREATE TABLE IF NOT EXISTS analytics.daily_metrics (
+        id SERIAL PRIMARY KEY,
+        date DATE NOT NULL,
+        metric_type TEXT NOT NULL,
+        content_type TEXT,
+        value DECIMAL(10, 2) NOT NULL,
+        count INTEGER NOT NULL
+      )
+    `
+
+    // Create indexes for better query performance
+    await sql`CREATE INDEX IF NOT EXISTS idx_content_views_content_id ON analytics.content_views(content_id)`
+    await sql`CREATE INDEX IF NOT EXISTS idx_content_views_created_at ON analytics.content_views(created_at)`
+    await sql`CREATE INDEX IF NOT EXISTS idx_user_engagements_content_id ON analytics.user_engagements(content_id)`
+    await sql`CREATE INDEX IF NOT EXISTS idx_transactions_content_id ON analytics.transactions(content_id)`
+    await sql`CREATE INDEX IF NOT EXISTS idx_daily_metrics_date ON analytics.daily_metrics(date)`
+    await sql`CREATE INDEX IF NOT EXISTS idx_daily_metrics_type ON analytics.daily_metrics(metric_type)`
+
+    console.log("Schema and tables created successfully")
+    return true
   } catch (error) {
-    console.error("Seed analytics data failed:", error)
+    console.error("Error creating schema and tables:", error)
+    return false
+  }
+}
+
+// Seed content views
+async function seedContentViews(count: number) {
+  try {
+    console.log(`Seeding ${count} content views...`)
+
+    for (let i = 0; i < count; i++) {
+      const contentId = randomContentId()
+      const contentType = contentId.split("_")[0]
+      const userId = Math.random() > 0.3 ? randomUserId() : null // 30% anonymous views
+      const createdAt = randomRecentDate()
+
+      await sql`
+        INSERT INTO analytics.content_views 
+        (content_id, content_type, user_id, created_at, session_id, device)
+        VALUES 
+        (${contentId}, ${contentType}, ${userId}, ${createdAt}, ${`session_${Math.floor(Math.random() * 5000)}`}, ${Math.random() > 0.7 ? "mobile" : "desktop"})
+      `
+    }
+
+    console.log(`${count} content views seeded successfully`)
+    return true
+  } catch (error) {
+    console.error("Error seeding content views:", error)
+    return false
+  }
+}
+
+// Seed user engagements
+async function seedUserEngagements(count: number) {
+  try {
+    console.log(`Seeding ${count} user engagements...`)
+
+    for (let i = 0; i < count; i++) {
+      const contentId = randomContentId()
+      const userId = randomUserId()
+      const engagementType = randomEngagementType()
+      const createdAt = randomRecentDate()
+
+      await sql`
+        INSERT INTO analytics.user_engagements 
+        (content_id, user_id, engagement_type, created_at, value)
+        VALUES 
+        (${contentId}, ${userId}, ${engagementType}, ${createdAt}, ${engagementType === "comment" ? "Great content!" : null})
+      `
+    }
+
+    console.log(`${count} user engagements seeded successfully`)
+    return true
+  } catch (error) {
+    console.error("Error seeding user engagements:", error)
+    return false
+  }
+}
+
+// Seed transactions
+async function seedTransactions(count: number) {
+  try {
+    console.log(`Seeding ${count} transactions...`)
+
+    for (let i = 0; i < count; i++) {
+      const contentId = randomContentId()
+      const userId = randomUserId()
+      const transactionType = randomTransactionType()
+      const createdAt = randomRecentDate()
+
+      // Different price ranges based on transaction type
+      let amount = 0
+      switch (transactionType) {
+        case "purchase":
+          amount = randomAmount(9.99, 29.99)
+          break
+        case "rental":
+          amount = randomAmount(2.99, 5.99)
+          break
+        case "subscription":
+          amount = randomAmount(9.99, 19.99)
+          break
+        case "royalty":
+          amount = randomAmount(0.1, 2.5)
+          break
+      }
+
+      await sql`
+        INSERT INTO analytics.transactions 
+        (content_id, user_id, transaction_type, amount, created_at)
+        VALUES 
+        (${contentId}, ${userId}, ${transactionType}, ${amount}, ${createdAt})
+      `
+    }
+
+    console.log(`${count} transactions seeded successfully`)
+    return true
+  } catch (error) {
+    console.error("Error seeding transactions:", error)
+    return false
+  }
+}
+
+// Seed daily metrics
+async function seedDailyMetrics() {
+  try {
+    console.log("Generating daily metrics from raw data...")
+
+    // Clear existing daily metrics
+    await sql`TRUNCATE TABLE analytics.daily_metrics`
+
+    // Generate views metrics
+    await sql`
+      INSERT INTO analytics.daily_metrics (date, metric_type, content_type, value, count)
+      SELECT 
+        DATE(created_at) as date,
+        'views' as metric_type,
+        content_type,
+        0 as value,
+        COUNT(*) as count
+      FROM analytics.content_views
+      GROUP BY DATE(created_at), content_type
+    `
+
+    // Generate revenue metrics
+    await sql`
+      INSERT INTO analytics.daily_metrics (date, metric_type, content_type, value, count)
+      SELECT 
+        DATE(t.created_at) as date,
+        'revenue' as metric_type,
+        SPLIT_PART(t.content_id, '_', 1) as content_type,
+        SUM(t.amount) as value,
+        COUNT(*) as count
+      FROM analytics.transactions t
+      GROUP BY DATE(t.created_at), SPLIT_PART(t.content_id, '_', 1)
+    `
+
+    // Generate engagement metrics
+    await sql`
+      INSERT INTO analytics.daily_metrics (date, metric_type, content_type, value, count)
+      SELECT 
+        DATE(created_at) as date,
+        'engagement' as metric_type,
+        SPLIT_PART(content_id, '_', 1) as content_type,
+        0 as value,
+        COUNT(*) as count
+      FROM analytics.user_engagements
+      GROUP BY DATE(created_at), SPLIT_PART(content_id, '_', 1)
+    `
+
+    console.log("Daily metrics generated successfully")
+    return true
+  } catch (error) {
+    console.error("Error generating daily metrics:", error)
+    return false
+  }
+}
+
+// Main seed function
+export async function seedAnalyticsData() {
+  console.log("Starting analytics data seeding...")
+
+  // Test database connection
+  const isConnected = await testConnection()
+  if (!isConnected) {
+    console.error("Database connection failed. Cannot seed data.")
     return {
       success: false,
-      error: "Seed analytics data failed",
-      details: error.message
+      error: "Database connection failed",
+    }
+  }
+
+  try {
+    // Create schema and tables
+    const schemaCreated = await createSchema()
+    if (!schemaCreated) {
+      return {
+        success: false,
+        error: "Failed to create schema and tables",
+      }
+    }
+
+    // Seed data
+    const viewsSeeded = await seedContentViews(500)
+    const engagementsSeeded = await seedUserEngagements(300)
+    const transactionsSeeded = await seedTransactions(200)
+
+    if (!viewsSeeded || !engagementsSeeded || !transactionsSeeded) {
+      return {
+        success: false,
+        error: "Failed to seed some data",
+      }
+    }
+
+    // Generate daily metrics
+    const metricsGenerated = await seedDailyMetrics()
+    if (!metricsGenerated) {
+      return {
+        success: false,
+        error: "Failed to generate daily metrics",
+      }
+    }
+
+    console.log("Analytics data seeding completed successfully")
+    return {
+      success: true,
+      views: 500,
+      engagements: 300,
+      transactions: 200,
+    }
+  } catch (error) {
+    console.error("Error seeding analytics data:", error)
+    return {
+      success: false,
+      error: String(error),
     }
   }
 }
