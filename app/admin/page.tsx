@@ -1,109 +1,106 @@
+import Link from "next/link"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import Link from "next/link"
+import { Database, BarChart3, Play, Users, FileText } from "lucide-react"
 
 export default function AdminDashboard() {
   return (
-    <div className="container py-8">
-      <h1 className="text-3xl font-bold mb-2">Admin Dashboard</h1>
-      <p className="text-muted-foreground mb-8">Manage your SoundWave platform</p>
+    <div className="container mx-auto py-10">
+      <h1 className="text-3xl font-bold mb-8">Admin Dashboard</h1>
 
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <Card>
           <CardHeader>
-            <CardTitle>Database Management</CardTitle>
-            <CardDescription>Seed and manage your database</CardDescription>
+            <CardTitle className="flex items-center">
+              <Database className="mr-2 h-5 w-5" />
+              Database Management
+            </CardTitle>
+            <CardDescription>Manage your database and sample data</CardDescription>
           </CardHeader>
           <CardContent>
-            <p>
-              Populate your database with sample data for testing and development. This includes users, content, NFTs,
-              events, and more.
-            </p>
+            <p>Seed your database with sample data or view the current database structure.</p>
           </CardContent>
-          <CardFooter>
-            <Link href="/admin/seed-database" className="w-full">
-              <Button className="w-full">Seed Database</Button>
-            </Link>
+          <CardFooter className="flex flex-col space-y-2">
+            <Button asChild className="w-full">
+              <Link href="/admin/seed-database">Seed Database</Link>
+            </Button>
           </CardFooter>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>Analytics</CardTitle>
-            <CardDescription>View platform metrics and performance</CardDescription>
+            <CardTitle className="flex items-center">
+              <BarChart3 className="mr-2 h-5 w-5" />
+              Analytics
+            </CardTitle>
+            <CardDescription>View and manage analytics data</CardDescription>
           </CardHeader>
           <CardContent>
-            <p>
-              Track user engagement, content performance, revenue, and other key metrics to understand your platform's
-              growth.
-            </p>
+            <p>Generate sample analytics data or view analytics dashboard.</p>
           </CardContent>
-          <CardFooter>
-            <Link href="/admin/analytics" className="w-full">
-              <Button className="w-full">View Analytics</Button>
-            </Link>
+          <CardFooter className="flex flex-col space-y-2">
+            <Button asChild className="w-full">
+              <Link href="/admin/seed-analytics">Seed Analytics</Link>
+            </Button>
+            <Button asChild variant="outline" className="w-full">
+              <Link href="/admin/analytics">View Analytics</Link>
+            </Button>
           </CardFooter>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>System Health</CardTitle>
-            <CardDescription>Check the status of all services</CardDescription>
+            <CardTitle className="flex items-center">
+              <Play className="mr-2 h-5 w-5" />
+              Quick Start
+            </CardTitle>
+            <CardDescription>Get your platform up and running</CardDescription>
           </CardHeader>
           <CardContent>
-            <p>
-              Monitor the health and status of all connected services including Supabase, Neon database, and other
-              integrations.
-            </p>
+            <p>Follow the quick start guide to set up your SoundWave platform.</p>
           </CardContent>
           <CardFooter>
-            <Link href="/admin/health" className="w-full">
-              <Button className="w-full">Check Health</Button>
-            </Link>
+            <Button asChild className="w-full">
+              <Link href="/admin/quickstart">Quick Start Guide</Link>
+            </Button>
           </CardFooter>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>Analytics Data</CardTitle>
-            <CardDescription>Generate sample analytics data</CardDescription>
+            <CardTitle className="flex items-center">
+              <Users className="mr-2 h-5 w-5" />
+              User Management
+            </CardTitle>
+            <CardDescription>Manage users and profiles</CardDescription>
           </CardHeader>
           <CardContent>
-            <p>
-              Populate your analytics database with sample data for testing and development. This includes views,
-              engagements, and transactions.
-            </p>
+            <p>View and manage user accounts and artist profiles.</p>
           </CardContent>
           <CardFooter>
-            <Link href="/admin/seed-analytics" className="w-full">
-              <Button className="w-full">Seed Analytics</Button>
-            </Link>
+            <Button asChild className="w-full" variant="outline">
+              <Link href="/admin/users">Manage Users</Link>
+            </Button>
           </CardFooter>
         </Card>
-      </div>
 
-      <div className="mt-8">
-        <h2 className="text-xl font-semibold mb-4">Quick Links</h2>
-        <div className="flex flex-wrap gap-4">
-          <Link href="/">
-            <Button variant="outline">Homepage</Button>
-          </Link>
-          <Link href="/marketplace">
-            <Button variant="outline">Marketplace</Button>
-          </Link>
-          <Link href="/stream">
-            <Button variant="outline">Streaming</Button>
-          </Link>
-          <Link href="/nfts">
-            <Button variant="outline">NFTs</Button>
-          </Link>
-          <Link href="/tickets">
-            <Button variant="outline">Tickets</Button>
-          </Link>
-          <Link href="/royalties">
-            <Button variant="outline">Royalties</Button>
-          </Link>
-        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <FileText className="mr-2 h-5 w-5" />
+              Content Management
+            </CardTitle>
+            <CardDescription>Manage music, movies, and other content</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p>View, edit, and manage all content on your platform.</p>
+          </CardContent>
+          <CardFooter>
+            <Button asChild className="w-full" variant="outline">
+              <Link href="/admin/content">Manage Content</Link>
+            </Button>
+          </CardFooter>
+        </Card>
       </div>
     </div>
   )
